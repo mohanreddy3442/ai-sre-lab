@@ -1,0 +1,16 @@
+groups:
+  - name: service_alerts
+    interval: 10s
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 10s
+        labels:
+          severity: critical
+          team: sre
+          category: availability
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} (instance: {{ $labels.instance }}) has been down for more than 10 seconds."
+          runbook_url: "https://wiki.example.com/runbooks/service-down"
+          value: "{{ $value }}"

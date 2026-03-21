@@ -1,0 +1,105 @@
+# Docker Compose configuration for AI-SRE-Lab
+# This file orchestrates all microservices and the AI analyzer
+
+services:
+  # Backend API service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai-sre-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - ./ai_analyzer:/app/ai_analyzer
+    command: python app.py
+    networks:
+      - ai-sre-network
+
+  # User Service - healthy service
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    container_name: user-service
+    ports:
+      - "8001:8001"
+    networks:
+      - ai-sre-network
+
+  # Order Service - service with errors
+  order-service:
+    build:
+      context: ./services/order-service
+      dockerfile: Dockerfile
+    container_name: order-service
+    ports:
+      - "8002:8002"
+    networks:
+      - ai-sre-network
+
+  # Alert Receiver Service - receives Prometheus webhooks
+  alert-receiver:
+    build:
+      context: ./services/alert-receiver
+      dockerfile: Dockerfile
+    container_name: alert-receiver
+    ports:
+      - "8003:8003"
+    networks:
+      - ai-sre-network
+
+  # AI Root Cause Analyzer Service
+  ai-analyzer:
+    build:
+      context: ./services/ai-analyzer
+      dockerfile: Dockerfile
+    container_name: ai-analyzer
+    ports:
+      - "8004:8004"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    privileged: true
+    networks:
+      - ai-sre-network
+
+  # Prometheus monitoring service
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml
+    networks:
+      - ai-sre-network
+
+  # Alertmanager service
+  alertmanager:
+    image: prom/alertmanager
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    networks:
+      - ai-sre-network
+
+  # Grafana visualization service
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - ai-sre-network
+
+# Define a custom network for container communication
+networks:
+  ai-sre-network:
+    driver: bridge
