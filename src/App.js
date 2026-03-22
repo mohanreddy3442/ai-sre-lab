@@ -31,7 +31,7 @@ function App() {
 
   return (
     <div style={{ padding: "20px", fontFamily: "Arial" }}>
-      <h1>Test 123 working </h1>
+      <h1>AI SRE Log Analyzer</h1>
 
       <textarea
         rows="10"
