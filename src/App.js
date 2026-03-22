@@ -20,13 +20,19 @@ function App() {
         })
       });
 
+      // Check if response is OK
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
       const data = await response.json();
       setResult(data);
     } catch (error) {
-      setResult({ error: "Request failed" });
+      console.error('API Error:', error);
+      setResult({ error: error.message || "Request failed" });
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
