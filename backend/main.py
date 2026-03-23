@@ -4,6 +4,7 @@ This API provides an /analyze endpoint that accepts logs and returns AI-generate
 """
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 import os
@@ -35,8 +36,6 @@ def call_ai_analyzer(log_data: str) -> dict:
             "recommendation": "Check if ai-analyzer service is running"
         }
 
-
-app = FastAPI(title="AI SRE Lab Backend", version="1.0.0")
 
 # Prometheus metrics
 http_requests_total = Counter(

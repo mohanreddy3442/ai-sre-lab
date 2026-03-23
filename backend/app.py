@@ -4,6 +4,7 @@ This API provides an /analyze endpoint that accepts logs and returns AI-generate
 """
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 import sys
@@ -19,6 +20,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ai_analyzer.analyzer import analyze_logs
 
 app = FastAPI(title="AI SRE Lab Backend", version="1.0.0")
+
+# CORS middleware - MUST be added immediately after app initialization
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Prometheus metrics
 http_requests_total = Counter(
