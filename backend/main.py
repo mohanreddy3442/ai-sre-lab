@@ -6,6 +6,7 @@ This API provides an /analyze endpoint that accepts logs and returns AI-generate
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from starlette.responses import Response
 from typing import List
 import os
 import time
@@ -36,6 +37,20 @@ def call_ai_analyzer(log_data: str) -> dict:
             "recommendation": "Check if ai-analyzer service is running"
         }
 
+
+# ================================================
+# FASTAPI APP INITIALIZATION (must be before any @app)
+# ================================================
+app = FastAPI(title="AI SRE Lab Backend", version="1.0.0")
+
+# CORS middleware - immediately after app init
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Prometheus metrics
 http_requests_total = Counter(
@@ -191,8 +206,6 @@ async def analyze(request: AnalyzeRequest):
         ).inc()
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
-
-from starlette.responses import Response
 
 if __name__ == "__main__":
     import uvicorn
