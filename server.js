@@ -4,28 +4,24 @@
  */
 
 const express = require('express');
-const cors = require('cors');
+const cors = require("cors");
 
 const app = express();
 const PORT = process.env.PORT || 8000;
 
 // ============================================
-// CORS CONFIGURATION
+// CORS CONFIGURATION - EXACT SETUP
 // ============================================
 
-// CORS options - exactly as specified
-const corsOptions = {
-  origin: "*",                                    // Allow all origins
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],  // All HTTP methods
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: false,                              // No credentials for "*" origin
-};
-
 // 1. Global CORS middleware - BEFORE routes
-app.use(cors(corsOptions));
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 
 // 2. Explicit preflight OPTIONS handler - BEFORE routes
-app.options("*", cors(corsOptions));
+app.options("*", cors());
 
 // 3. Body parser middleware - BEFORE routes
 app.use(express.json({ limit: '10mb' }));
@@ -36,6 +32,7 @@ app.use(express.json({ limit: '10mb' }));
 
 // Root endpoint
 app.get('/', (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.json({
     service: 'AI SRE Lab Backend',
     version: '1.0.0',
@@ -43,8 +40,9 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check endpoint
+// Health check endpoint - WITH MANUAL CORS HEADER
 app.get('/health', (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.status(200).json({ 
     status: 'healthy', 
     service: 'backend',
@@ -54,6 +52,7 @@ app.get('/health', (req, res) => {
 
 // Analyze endpoint - POST
 app.post('/analyze', (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
   const { logs } = req.body;
   
   // Accept both string and array formats
@@ -83,6 +82,7 @@ app.post('/analyze', (req, res) => {
 
 // 404 handler
 app.use((req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.status(404).json({
     error: 'Not Found',
     message: `Route ${req.method} ${req.path} not found`
@@ -91,6 +91,7 @@ app.use((req, res) => {
 
 // Global error handler
 app.use((err, req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
   console.error('Server error:', err);
   res.status(500).json({
     error: 'Internal Server Error',
@@ -105,7 +106,7 @@ app.use((err, req, res, next) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`CORS enabled for all origins`);
+  console.log(`CORS enabled: origin=*, methods=GET,POST,PUT,DELETE,OPTIONS`);
 });
 
 module.exports = app;
