@@ -1,6 +1,6 @@
 /**
  * Express Server with CORS Configuration
- * Production-ready with proper error handling
+ * Production-ready with proper CORS handling
  */
 
 const express = require('express');
@@ -10,20 +10,24 @@ const app = express();
 const PORT = process.env.PORT || 8000;
 
 // ============================================
-// CORS MIDDLEWARE - Order is critical
+// CORS CONFIGURATION
 // ============================================
 
-// 1. Global CORS for all routes (allows localhost:3000)
-app.use(cors({ 
-  origin: "*",
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+// CORS options - exactly as specified
+const corsOptions = {
+  origin: "*",                                    // Allow all origins
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],  // All HTTP methods
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: false,                              // No credentials for "*" origin
+};
 
-// 2. Explicit preflight OPTIONS handler
-app.options("*", cors());
+// 1. Global CORS middleware - BEFORE routes
+app.use(cors(corsOptions));
 
-// 3. Body parser middleware
+// 2. Explicit preflight OPTIONS handler - BEFORE routes
+app.options("*", cors(corsOptions));
+
+// 3. Body parser middleware - BEFORE routes
 app.use(express.json({ limit: '10mb' }));
 
 // ============================================
@@ -35,12 +39,7 @@ app.get('/', (req, res) => {
   res.json({
     service: 'AI SRE Lab Backend',
     version: '1.0.0',
-    status: 'running',
-    endpoints: {
-      root: '/ (GET)',
-      health: '/health (GET)',
-      analyze: '/analyze (POST) - Analyze logs for root cause'
-    }
+    status: 'running'
   });
 });
 
@@ -53,21 +52,28 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Analyze endpoint - main API
+// Analyze endpoint - POST
 app.post('/analyze', (req, res) => {
   const { logs } = req.body;
   
-  // Validate input
-  if (!logs || !Array.isArray(logs) || logs.length === 0) {
+  // Accept both string and array formats
+  let logsArray = [];
+  
+  if (typeof logs === 'string') {
+    logsArray = logs.trim() ? [logs] : [];
+  } else if (Array.isArray(logs)) {
+    logsArray = logs.filter(log => typeof log === 'string' && log.trim());
+  }
+  
+  if (logsArray.length === 0) {
     return res.status(400).json({
       error: 'Invalid request',
-      message: 'logs array is required'
+      message: 'logs must be a non-empty string or array of strings'
     });
   }
   
-  console.log('Received logs:', logs);
+  console.log('Received logs:', logsArray);
   
-  // Return analysis result
   res.status(200).json({
     analysis: 'Analysis complete',
     root_cause: 'Database connection timeout',
@@ -99,6 +105,7 @@ app.use((err, req, res, next) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`CORS enabled for all origins`);
 });
 
 module.exports = app;
