@@ -6,7 +6,7 @@ This API provides an /analyze endpoint that accepts logs and returns AI-generate
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from starlette.responses import Response
+from starlette.responses import Response, JSONResponse
 from typing import List
 import os
 import time
@@ -131,7 +131,20 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy", "service": "backend"}
+    response = {"status": "healthy", "service": "backend"}
+    return JSONResponse(
+        content=response,
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
+
+
+@app.get("/debug")
+async def debug():
+    """Debug endpoint to verify latest code deployment"""
+    return JSONResponse(
+        content={"message": "NEW CODE DEPLOYED"},
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
 
 
 @app.get("/metrics")

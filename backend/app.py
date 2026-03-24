@@ -6,6 +6,7 @@ This API provides an /analyze endpoint that accepts logs and returns AI-generate
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from starlette.responses import Response, JSONResponse
 from typing import List
 import sys
 import os
@@ -25,7 +26,7 @@ app = FastAPI(title="AI SRE Lab Backend", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -106,7 +107,19 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy", "service": "backend"}
+    return JSONResponse(
+        content={"status": "healthy", "service": "backend"},
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
+
+
+@app.get("/debug")
+async def debug():
+    """Debug endpoint to verify latest code deployment"""
+    return JSONResponse(
+        content={"message": "NEW CODE DEPLOYED"},
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
 
 
 @app.get("/metrics")
