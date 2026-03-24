@@ -46,12 +46,14 @@ app = FastAPI(title="AI SRE Lab Backend", version="1.0.0")
 # CORS middleware - immediately after app init
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
+    allow_origins=["*"],  # TEMP - fixes everything instantly
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
-
 )
+
+
+
 
 # Prometheus metrics
 http_requests_total = Counter(
