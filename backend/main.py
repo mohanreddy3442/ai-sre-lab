@@ -13,29 +13,28 @@ import time
 import requests
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
-# AI Analyzer service URL (can be overridden via environment variable)
-AI_ANALYZER_URL = os.getenv("AI_ANALYZER_URL", "http://ai-analyzer:8004")
+# AI Analyzer service URL - use deployed service
+AI_ANALYZER_URL = os.getenv("AI_ANALYZER_URL", "https://ai-analyzer-kxo9.onrender.com/analyze")
 
 
-def call_ai_analyzer(log_data: str) -> dict:
+def call_ai_analyzer(logs: List[str]) -> dict:
     """
     Call the AI analyzer service via HTTP.
-    Returns analysis result or error dict if service is unavailable.
+    Returns analysis result or raises exception if service is unavailable.
     """
     try:
         response = requests.post(
-            f"{AI_ANALYZER_URL}/analyze",
-            json={"logs": log_data.split('\n')},
-            timeout=30
+            AI_ANALYZER_URL,
+            json={"logs": logs},
+            timeout=10
         )
         response.raise_for_status()
         return response.json()
-    except Exception as e:
-        return {
-            "analysis": "AI analysis unavailable",
-            "root_cause": str(e),
-            "recommendation": "Check if ai-analyzer service is running"
-        }
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"AI analyzer service unavailable: {str(e)}"
+        )
 
 
 # ================================================
@@ -51,7 +50,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 
 
@@ -203,18 +201,18 @@ async def analyze(request: AnalyzeRequest):
     3. Returns structured analysis results
     """
     try:
-        # Convert list of logs to a single string
-        log_text = "\n".join(request.logs)
-        
-        # Call the AI analyzer service via HTTP
-        result = call_ai_analyzer(log_text)
+        # Call the AI analyzer service via HTTP with the logs list
+        result = call_ai_analyzer(request.logs)
         
         return AnalyzeResponse(
-            analysis=result["analysis"],
-            root_cause=result["root_cause"],
-            recommendation=result["recommendation"]
+            analysis=result.get("analysis", "No analysis available"),
+            root_cause=result.get("root_cause", "No root cause identified"),
+            recommendation=result.get("recommendation", "No recommendations available")
         )
     
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 502 from call_ai_analyzer)
+        raise
     except Exception as e:
         service_errors_total.labels(
             service="backend",
