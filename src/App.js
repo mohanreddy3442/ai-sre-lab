@@ -3,6 +3,7 @@ import "./App.css";
 
 // API URL - hardcoded for production
 const API_URL = "https://ai-backend-1gq9.onrender.com";
+const ANALYZER_URL = "https://ai-analyzer-kxo9.onrender.com";
 
 // Detect severity of log line
 const getSeverity = (line) => {
@@ -23,6 +24,36 @@ function Dashboard({ currentPage, setCurrentPage }) {
   const [logs, setLogs] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState({
+    backend: "checking",
+    analyzer: "checking"
+  });
+  const [alerts, setAlerts] = useState([]);
+  const [incidents, setIncidents] = useState([]);
+
+  const checkStatus = async () => {
+    try {
+      const backendRes = await fetch(`${API_URL}/health`);
+      const backendData = await backendRes.json();
+
+      const analyzerRes = await fetch(`${ANALYZER_URL}/health`);
+      const analyzerData = await analyzerRes.json();
+
+      setStatus({
+        backend: backendData.status,
+        analyzer: analyzerData.status
+      });
+    } catch {
+      setStatus({
+        backend: "down",
+        analyzer: "down"
+      });
+    }
+  };
+
+  useEffect(() => {
+    checkStatus();
+  }, []);
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
@@ -58,6 +89,29 @@ function Dashboard({ currentPage, setCurrentPage }) {
       }
       const data = await response.json();
       setResult(data);
+      
+      // Check for critical issues and add alerts
+      const newAlerts = [];
+      if (data.root_cause?.toLowerCase().includes("failure") ||
+          data.analysis?.toLowerCase().includes("critical")) {
+        newAlerts.push({
+          id: Date.now(),
+          message: data.root_cause,
+          severity: "critical"
+        });
+      }
+      if (newAlerts.length > 0) {
+        setAlerts(prev => [...newAlerts, ...prev]);
+        
+        // Create incident from alert
+        const incident = {
+          id: Date.now(),
+          title: data.root_cause,
+          status: "OPEN",
+          time: new Date().toLocaleString()
+        };
+        setIncidents(prev => [incident, ...prev]);
+      }
     } catch (error) {
       if (error.name === "AbortError") {
         setResult({ error: "Request timed out. Please try again." });
@@ -72,6 +126,14 @@ function Dashboard({ currentPage, setCurrentPage }) {
 
   const logLines = logs.split("\n").filter(line => line.trim());
 
+  const resolveIncident = (id) => {
+    setIncidents(prev =>
+      prev.map(i =>
+        i.id === id ? { ...i, status: "RESOLVED" } : i
+      )
+    );
+  };
+
   return (
     <div className="app-container">
       <header className="app-header">
@@ -79,6 +141,10 @@ function Dashboard({ currentPage, setCurrentPage }) {
           <div>
             <h1 className="app-title">🤖 AI SRE Log Analyzer</h1>
             <p className="app-subtitle">Intelligent log analysis for site reliability engineering</p>
+            <div className="status-bar">
+              <span>Backend: {status.backend}</span>
+              <span>AI Analyzer: {status.analyzer}</span>
+            </div>
           </div>
           <nav className="nav-tabs">
             <button className={`nav-tab ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentPage('dashboard')}>Dashboard</button>
@@ -131,6 +197,15 @@ function Dashboard({ currentPage, setCurrentPage }) {
             <span className="panel-hint">AI-powered insights</span>
           </div>
           <div className="results-container">
+            {alerts.length > 0 && (
+              <div className="alerts-section">
+                {alerts.map(alert => (
+                  <div key={alert.id} className={`alert-card ${alert.severity}`}>
+                    🚨 {alert.message}
+                  </div>
+                ))}
+              </div>
+            )}
             {loading && <div className="loading-state"><div className="loading-spinner"></div><p>Analyzing...</p></div>}
             {!loading && result && (
               <div className="results-grid">
@@ -146,6 +221,29 @@ function Dashboard({ currentPage, setCurrentPage }) {
               </div>
             )}
             {!loading && !result && <div className="empty-state"><span className="empty-icon">📋</span><h3>Ready to Analyze</h3><p>Enter logs and click "Analyze Logs"</p></div>}
+            
+            {/* Incidents Section */}
+            {incidents.length > 0 && (
+              <div className="incident-section">
+                <h3>🚨 Incidents</h3>
+                {incidents.map(inc => (
+                  <div key={inc.id} className="incident-card">
+                    <div className="incident-header">
+                      <span>{inc.title}</span>
+                      <span className={`status ${inc.status.toLowerCase()}`}>
+                        {inc.status}
+                      </span>
+                    </div>
+                    <div className="incident-footer">
+                      <span>{inc.time}</span>
+                      {inc.status === "OPEN" && (
+                        <button onClick={() => resolveIncident(inc.id)}>Resolve</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       </main>

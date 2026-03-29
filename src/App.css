@@ -53,6 +53,89 @@ body {
   font-size: 0.95rem;
 }
 
+/* Status Bar */
+.status-bar {
+  display: flex;
+  gap: 20px;
+  margin-top: 10px;
+  font-size: 14px;
+  justify-content: center;
+}
+
+.status-bar span {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(148, 163, 184, 0.2);
+  font-weight: 500;
+}
+
+/* Alerts Section */
+.alerts-section {
+  margin-bottom: 10px;
+}
+
+.alert-card {
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.alert-card.critical {
+  background: rgba(239, 68, 68, 0.2);
+  border-left: 4px solid red;
+  color: #fca5a5;
+}
+
+/* Incident Section */
+.incident-section {
+  margin-top: 20px;
+}
+
+.incident-card {
+  background: rgba(15, 23, 42, 0.6);
+  padding: 12px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+
+.incident-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.status.open {
+  color: #f87171;
+  font-weight: bold;
+}
+
+.status.resolved {
+  color: #34d399;
+  font-weight: bold;
+}
+
+.incident-footer {
+  margin-top: 6px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.incident-footer button {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.incident-footer button:hover {
+  background: #2563eb;
+}
+
 /* Dashboard Layout */
 .dashboard {
   display: grid;

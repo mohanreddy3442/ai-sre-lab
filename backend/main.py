@@ -348,14 +348,14 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
 # ================================================
 
 @app.post("/analyze", response_model=AnalyzeResponse)
-async def analyze(request: AnalyzeRequest, current_user: dict = Depends(get_current_user), db = Depends(get_db)):
-    """Analyze logs and save to history"""
+async def analyze(request: AnalyzeRequest, db = Depends(get_db)):
+    """Analyze logs and save to history (no auth required)"""
     try:
         result = call_ai_analyzer(request.logs)
         
         # Save to database
         db_analysis = Analysis(
-            user_id=current_user["email"],
+            user_id="anonymous",
             logs="\n".join(request.logs),
             analysis=result.get("analysis", "No analysis available"),
             root_cause=result.get("root_cause", "No root cause identified"),
@@ -383,21 +383,18 @@ async def analyze(request: AnalyzeRequest, current_user: dict = Depends(get_curr
 
 
 @app.get("/history", response_model=List[HistoryResponse])
-async def get_history(current_user: dict = Depends(get_current_user), db = Depends(get_db)):
-    """Get all analysis history for current user"""
-    analyses = db.query(Analysis).filter(
-        Analysis.user_id == current_user["email"]
-    ).order_by(Analysis.created_at.desc()).all()
+async def get_history(db = Depends(get_db)):
+    """Get all analysis history (no auth required)"""
+    analyses = db.query(Analysis).order_by(Analysis.created_at.desc()).all()
     
     return analyses
 
 
 @app.delete("/history/{analysis_id}")
-async def delete_history(analysis_id: int, current_user: dict = Depends(get_current_user), db = Depends(get_db)):
-    """Delete a specific analysis"""
+async def delete_history(analysis_id: int, db = Depends(get_db)):
+    """Delete a specific analysis (no auth required)"""
     analysis = db.query(Analysis).filter(
-        Analysis.id == analysis_id,
-        Analysis.user_id == current_user["email"]
+        Analysis.id == analysis_id
     ).first()
     
     if not analysis:
