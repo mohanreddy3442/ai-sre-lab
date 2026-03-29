@@ -254,27 +254,32 @@ function Dashboard({ currentPage, setCurrentPage }) {
 // ========================
 // HISTORY PAGE
 // ========================
-function HistoryPage({ setCurrentPage }) {
+function HistoryPage({ setCurrentPage, currentPage }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const fetchHistory = useCallback(async () => {
+  const fetchHistory = async () => {
+    console.log("Fetching history...");
     try {
       const response = await fetch(`${API_URL}/history`);
+      console.log("History response:", response);
       if (!response.ok) throw new Error("Failed to fetch history");
       const data = await response.json();
+      console.log("History data:", data);
       setHistory(data);
     } catch (err) {
+      console.error("Failed to fetch history:", err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [API_URL]);
+  };
 
   useEffect(() => {
+    console.log("HistoryPage mounted, currentPage:", currentPage);
     fetchHistory();
-  }, [fetchHistory]);
+  }, [currentPage]);
 
   const deleteAnalysis = async (id) => {
     try {
@@ -369,7 +374,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState("dashboard");
 
   if (currentPage === "history") {
-    return <HistoryPage setCurrentPage={setCurrentPage} />;
+    return <HistoryPage setCurrentPage={setCurrentPage} currentPage={currentPage} />;
   }
 
   return <Dashboard currentPage={currentPage} setCurrentPage={setCurrentPage} />;
