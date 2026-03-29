@@ -386,7 +386,6 @@ async def analyze(request: AnalyzeRequest, db = Depends(get_db)):
 async def get_history(db = Depends(get_db)):
     """Get all analysis history (no auth required)"""
     analyses = db.query(Analysis).order_by(Analysis.created_at.desc()).all()
-    
     return analyses
 
 
