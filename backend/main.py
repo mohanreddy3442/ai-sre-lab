@@ -111,19 +111,19 @@ users_db = {}
 def call_ai_analyzer(logs: List[str]) -> dict:
     """
     Call the AI analyzer service with retry logic.
-    Retries 3 times with 2 second delay between attempts.
+    Retries 4 times with 3 second delay between attempts.
     """
     import time
     
-    retries = 3
-    delay = 2
+    retries = 4
+    delay = 3
 
     for attempt in range(retries):
         try:
             response = requests.post(
                 AI_ANALYZER_URL,
                 json={"logs": logs},
-                timeout=20
+                timeout=30
             )
             response.raise_for_status()
             return response.json()
@@ -134,7 +134,7 @@ def call_ai_analyzer(logs: List[str]) -> dict:
             else:
                 raise HTTPException(
                     status_code=502,
-                    detail=f"AI analyzer timeout after retries: {str(e)}"
+                    detail="AI analyzer is waking up. Please retry in a few seconds."
                 )
 
 
