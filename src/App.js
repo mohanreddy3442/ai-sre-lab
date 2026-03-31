@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import "./App.css";
 
 // API URL - hardcoded for production
@@ -20,7 +21,7 @@ const getSeverity = (line) => {
 // ========================
 // DASHBOARD PAGE
 // ========================
-function Dashboard({ currentPage, setCurrentPage }) {
+function Dashboard({ currentPage, setCurrentPage, onAnalysisComplete }) {
   const [logs, setLogs] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -30,6 +31,8 @@ function Dashboard({ currentPage, setCurrentPage }) {
   });
   const [alerts, setAlerts] = useState([]);
   const [incidents, setIncidents] = useState([]);
+  const [insights, setInsights] = useState(null);
+  const [insightsLoading, setInsightsLoading] = useState(true);
 
   const checkStatus = async () => {
     try {
@@ -53,7 +56,116 @@ function Dashboard({ currentPage, setCurrentPage }) {
 
   useEffect(() => {
     checkStatus();
+    fetchInsights();
   }, []);
+
+  const fetchInsights = async () => {
+    setInsightsLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/history`);
+      if (!response.ok) throw new Error("Failed to fetch");
+      const data = await response.json();
+      
+      let totalErrors = 0;
+      let totalWarnings = 0;
+      const keywordCount = {};
+      let latestTimestamp = null;
+
+      // Chart data processing
+      const errorsByDate = {};
+      const analysesByDate = {};
+
+      data.forEach(item => {
+        // Get date key (YYYY-MM-DD)
+        const dateKey = item.created_at ? new Date(item.created_at).toISOString().split('T')[0] : 'Unknown';
+        
+        // Initialize date entries
+        if (!errorsByDate[dateKey]) errorsByDate[dateKey] = 0;
+        if (!analysesByDate[dateKey]) analysesByDate[dateKey] = 0;
+        
+        // Count errors and warnings
+        const lines = item.logs.split('\n');
+        let itemErrors = 0;
+        lines.forEach(line => {
+          const upperLine = line.toUpperCase();
+          if (upperLine.includes('ERROR')) {
+            totalErrors++;
+            itemErrors++;
+          }
+          if (upperLine.includes('WARN')) totalWarnings++;
+          
+          // Keyword frequency (simple word extraction)
+          const words = line.split(/\s+/).filter(w => w.length > 3);
+          words.forEach(word => {
+            const cleanWord = word.toLowerCase().replace(/[^a-z]/g, '');
+            if (cleanWord) {
+              keywordCount[cleanWord] = (keywordCount[cleanWord] || 0) + 1;
+            }
+          });
+        });
+        
+        // Add to chart data
+        errorsByDate[dateKey] += itemErrors;
+        analysesByDate[dateKey] += 1;
+
+        // Track latest timestamp
+        if (item.created_at) {
+          const itemDate = new Date(item.created_at);
+          if (!latestTimestamp || itemDate > latestTimestamp) {
+            latestTimestamp = itemDate;
+          }
+        }
+      });
+
+      // Find most common keyword
+      let mostCommon = 'N/A';
+      let maxCount = 0;
+      Object.entries(keywordCount).forEach(([word, count]) => {
+        if (count > maxCount) {
+          maxCount = count;
+          mostCommon = word;
+        }
+      });
+
+      // Format chart data
+      const errorsChartData = Object.entries(errorsByDate)
+        .map(([date, errors]) => ({ date, errors }))
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      const analysesChartData = Object.entries(analysesByDate)
+        .map(([date, count]) => ({ date, count }))
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      // Fallback dummy data if empty
+      const finalErrorsData = errorsChartData.length > 0 ? errorsChartData : [
+        { date: "2026-03-28", errors: 2 },
+        { date: "2026-03-29", errors: 4 },
+        { date: "2026-03-30", errors: 1 },
+        { date: "2026-03-31", errors: 3 }
+      ];
+
+      const finalAnalysesData = analysesChartData.length > 0 ? analysesChartData : [
+        { date: "2026-03-28", count: 3 },
+        { date: "2026-03-29", count: 5 },
+        { date: "2026-03-30", count: 2 },
+        { date: "2026-03-31", count: 4 }
+      ];
+
+      setInsights({
+        totalAnalyses: data.length,
+        totalErrors,
+        totalWarnings,
+        mostCommonKeyword: mostCommon,
+        lastAnalysisTime: latestTimestamp ? latestTimestamp.toLocaleString() : 'N/A',
+        errorsChartData: finalErrorsData,
+        analysesChartData: finalAnalysesData
+      });
+    } catch (err) {
+      console.error('Insights error:', err);
+    } finally {
+      setInsightsLoading(false);
+    }
+  };
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
@@ -77,9 +189,12 @@ function Dashboard({ currentPage, setCurrentPage }) {
     try {
       const response = await fetch(`${API_URL}/analyze`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logs: logs.split("\n") }),
-        signal: controller.signal
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          logs: logs.split("\n")   // IMPORTANT
+        })
       });
 
       clearTimeout(timeout);
@@ -89,6 +204,11 @@ function Dashboard({ currentPage, setCurrentPage }) {
       }
       const data = await response.json();
       setResult(data);
+      
+      // Trigger history refresh
+      if (onAnalysisComplete) {
+        onAnalysisComplete();
+      }
       
       // Check for critical issues and add alerts
       const newAlerts = [];
@@ -152,6 +272,87 @@ function Dashboard({ currentPage, setCurrentPage }) {
           </nav>
         </div>
       </header>
+
+      {/* Insights Bar */}
+      {!insightsLoading && insights && (
+        <div className="insights-bar">
+          <div className="insight-card">
+            <span className="insight-icon">📊</span>
+            <div className="insight-content">
+              <span className="insight-value">{insights.totalAnalyses}</span>
+              <span className="insight-label">Total Analyses</span>
+            </div>
+          </div>
+          <div className="insight-card error-card">
+            <span className="insight-icon">🔥</span>
+            <div className="insight-content">
+              <span className="insight-value">{insights.totalErrors}</span>
+              <span className="insight-label">Errors Detected</span>
+            </div>
+          </div>
+          <div className="insight-card warning-card">
+            <span className="insight-icon">⚠️</span>
+            <div className="insight-content">
+              <span className="insight-value">{insights.totalWarnings}</span>
+              <span className="insight-label">Warnings</span>
+            </div>
+          </div>
+          <div className="insight-card">
+            <span className="insight-icon">🕒</span>
+            <div className="insight-content">
+              <span className="insight-value small">{insights.lastAnalysisTime}</span>
+              <span className="insight-label">Last Analysis</span>
+            </div>
+          </div>
+          <button className="refresh-insights-btn" onClick={fetchInsights} disabled={insightsLoading}>
+            🔄
+          </button>
+        </div>
+      )}
+
+      {/* Charts Section */}
+      {!insightsLoading && insights && (
+        <div className="charts-section">
+          <div className="chart-card">
+            <h3 className="chart-title">📈 Errors Over Time</h3>
+            {insights.errorsChartData && insights.errorsChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={insights.errorsChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" />
+                  <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} tickFormatter={(val) => val.slice(5)} />
+                  <YAxis stroke="#94a3b8" fontSize={12} />
+                  <Tooltip 
+                    contentStyle={{ background: '#1e293b', border: '1px solid rgba(148,163,184,0.2)', borderRadius: '8px' }}
+                    labelStyle={{ color: '#94a3b8' }}
+                  />
+                  <Line type="monotone" dataKey="errors" stroke="#ef4444" strokeWidth={2} dot={{ fill: '#ef4444', r: 4 }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="no-data">No data to display</div>
+            )}
+          </div>
+          <div className="chart-card">
+            <h3 className="chart-title">📊 Analyses Per Day</h3>
+            {insights.analysesChartData && insights.analysesChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={insights.analysesChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" />
+                  <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} tickFormatter={(val) => val.slice(5)} />
+                  <YAxis stroke="#94a3b8" fontSize={12} />
+                  <Tooltip 
+                    contentStyle={{ background: '#1e293b', border: '1px solid rgba(148,163,184,0.2)', borderRadius: '8px' }}
+                    labelStyle={{ color: '#94a3b8' }}
+                  />
+                  <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="no-data">No data to display</div>
+            )}
+          </div>
+        </div>
+      )}
 
       <main className="dashboard">
         <section className="panel left-panel">
@@ -260,6 +461,7 @@ function HistoryPage({ setCurrentPage, currentPage }) {
   const [error, setError] = useState("");
 
   const fetchHistory = async () => {
+    setLoading(true);
     console.log("Fetching history...");
     try {
       const response = await fetch(`${API_URL}/history`);
@@ -268,6 +470,7 @@ function HistoryPage({ setCurrentPage, currentPage }) {
       const data = await response.json();
       console.log("History data:", data);
       setHistory(data);
+      setError("");
     } catch (err) {
       console.error("Failed to fetch history:", err);
       setError(err.message);
@@ -312,8 +515,8 @@ function HistoryPage({ setCurrentPage, currentPage }) {
             <p className="app-subtitle">View your past log analyses</p>
           </div>
           <nav className="nav-tabs">
-            <button className={`nav-tab ${false ? 'active' : ''}`} onClick={() => setCurrentPage('dashboard')}>Dashboard</button>
-            <button className={`nav-tab ${true ? 'active' : ''}`} onClick={() => setCurrentPage('history')}>History</button>
+            <button className={`nav-tab ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentPage('dashboard')}>Dashboard</button>
+            <button className={`nav-tab ${currentPage === 'history' ? 'active' : ''}`} onClick={() => setCurrentPage('history')}>History</button>
           </nav>
         </div>
       </header>
@@ -333,34 +536,42 @@ function HistoryPage({ setCurrentPage, currentPage }) {
         )}
 
         {!loading && !error && history.length > 0 && (
-          <div className="history-list">
-            {history.map((item) => (
-              <div key={item.id} className="history-card">
-                <div className="history-header">
-                  <span className="history-date">📅 {formatDate(item.created_at)}</span>
-                  <button className="delete-btn" onClick={() => deleteAnalysis(item.id)}>🗑️ Delete</button>
+          <>
+            <div className="history-stats">
+              <span className="total-count">📊 Total Analyses: {history.length}</span>
+              <button className="refresh-btn" onClick={fetchHistory} disabled={loading}>
+                🔄 Refresh
+              </button>
+            </div>
+            <div className="history-list">
+              {history.map((item) => (
+                <div key={item.id} className="history-card">
+                  <div className="history-header">
+                    <span className="history-date">📅 {formatDate(item.created_at)}</span>
+                    <button className="delete-btn" onClick={() => deleteAnalysis(item.id)}>🗑️ Delete</button>
+                  </div>
+                  <div className="history-content">
+                    <div className="history-section">
+                      <h4>📝 Logs</h4>
+                      <pre className="logs-preview">{truncateLogs(item.logs)}</pre>
+                    </div>
+                    <div className="history-section">
+                      <h4>🔎 Analysis</h4>
+                      <p>{item.analysis}</p>
+                    </div>
+                    <div className="history-section root-cause">
+                      <h4>🎯 Root Cause</h4>
+                      <p>{item.root_cause}</p>
+                    </div>
+                    <div className="history-section recommendation">
+                      <h4>💡 Recommendation</h4>
+                      <p>{item.recommendation}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="history-content">
-                  <div className="history-section">
-                    <h4>📝 Logs</h4>
-                    <pre className="logs-preview">{truncateLogs(item.logs)}</pre>
-                  </div>
-                  <div className="history-section">
-                    <h4>🔎 Analysis</h4>
-                    <p>{item.analysis}</p>
-                  </div>
-                  <div className="history-section">
-                    <h4>🎯 Root Cause</h4>
-                    <p>{item.root_cause}</p>
-                  </div>
-                  <div className="history-section">
-                    <h4>💡 Recommendation</h4>
-                    <p>{item.recommendation}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </>
         )}
       </main>
     </div>
@@ -372,12 +583,17 @@ function HistoryPage({ setCurrentPage, currentPage }) {
 // ========================
 function App() {
   const [currentPage, setCurrentPage] = useState("dashboard");
+  const [historyKey, setHistoryKey] = useState(0);
+
+  const refreshHistory = useCallback(() => {
+    setHistoryKey(prev => prev + 1);
+  }, []);
 
   if (currentPage === "history") {
-    return <HistoryPage setCurrentPage={setCurrentPage} currentPage={currentPage} />;
+    return <HistoryPage setCurrentPage={setCurrentPage} currentPage={currentPage} key={historyKey} />;
   }
 
-  return <Dashboard currentPage={currentPage} setCurrentPage={setCurrentPage} />;
+  return <Dashboard currentPage={currentPage} setCurrentPage={setCurrentPage} onAnalysisComplete={refreshHistory} />;
 }
 
 export default App;

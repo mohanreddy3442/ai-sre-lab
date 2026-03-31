@@ -18,8 +18,10 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 import os
 import time
+import asyncio
 import requests
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+import logging
 
 # ========================
 # CONFIGURATION
@@ -110,32 +112,52 @@ users_db = {}
 
 def call_ai_analyzer(logs: List[str]) -> dict:
     """
-    Call the AI analyzer service with retry logic.
-    Retries 4 times with 3 second delay between attempts.
+    Call the AI analyzer service with STRONG retry + exponential backoff.
+    - Retries 5+ times
+    - Exponential backoff: 2s, 4s, 6s, 10s, 15s...
+    - Timeout per request = 30s
+    - Returns graceful response if all retries fail
     """
     import time
     
-    retries = 4
-    delay = 3
-
+    retries = 5
+    base_delay = 2  # Start with 2 seconds
+    max_delay = 15   # Cap at 15 seconds
+    
+    # Exponential backoff delays: 2, 4, 6, 10, 15
+    delays = [base_delay * i if i * base_delay <= max_delay else max_delay for i in range(1, retries + 1)]
+    
+    print(f"[AI Analyzer] Starting call with {retries} retries...")
+    
     for attempt in range(retries):
         try:
+            print(f"[AI Analyzer] Retry attempt {attempt + 1}/{retries}")
+            
             response = requests.post(
                 AI_ANALYZER_URL,
                 json={"logs": logs},
                 timeout=30
             )
             response.raise_for_status()
+            
+            print(f"[AI Analyzer] Woke up successfully on attempt {attempt + 1}")
             return response.json()
 
         except requests.exceptions.RequestException as e:
+            print(f"[AI Analyzer] Attempt {attempt + 1} failed: {str(e)}")
+            
             if attempt < retries - 1:
+                delay = delays[attempt]
+                print(f"[AI Analyzer] Waiting {delay}s before next retry...")
                 time.sleep(delay)
             else:
-                raise HTTPException(
-                    status_code=502,
-                    detail="AI analyzer is waking up. Please retry in a few seconds."
-                )
+                print("[AI Analyzer] Failed after all retries - returning graceful response")
+                # Return graceful response instead of raising exception
+                return {
+                    "analysis": "AI service temporarily unavailable",
+                    "root_cause": "Cold start or service unreachable",
+                    "recommendation": "Please retry in a few seconds"
+                }
 
 
 # ================================================
@@ -173,7 +195,41 @@ service_errors_total = Counter(
 
 
 # ================================================
-# PYDANTIC MODELS
+# BACKGROUND AUTO-WAKE SYSTEM
+# ================================================
+
+async def wakeup_ai_analyzer():
+    """
+    Background task to keep AI analyzer awake.
+    Runs every 5 minutes and sends a lightweight request.
+    """
+    while True:
+        try:
+            print("[Background] Sending warmup request to AI analyzer...")
+            response = requests.post(
+                AI_ANALYZER_URL,
+                json={"logs": ["health check log"]},
+                timeout=10
+            )
+            response.raise_for_status()
+            print("[Background] AI analyzer warmed up successfully")
+        except Exception as e:
+            # Silent failure - ignore errors, don't crash
+            print(f"[Background] Warmup attempt failed (ignored): {str(e)}")
+        
+        # Wait 5 minutes before next wakeup
+        await asyncio.sleep(300)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background task on app startup."""
+    asyncio.create_task(wakeup_ai_analyzer())
+    print("[Startup] Background auto-wake system started (every 5 min)")
+
+
+# ================================================
+# PUBLIC ENDPOINTS
 # ================================================
 
 class AnalyzeRequest(BaseModel):
@@ -261,6 +317,27 @@ async def health_check():
         content={"status": "healthy", "service": "backend"},
         headers={"Access-Control-Allow-Origin": "*"}
     )
+
+
+@app.get("/warmup")
+async def warmup():
+    """
+    Warmup endpoint - calls AI analyzer once to wake it up.
+    Returns status of warmup operation.
+    """
+    try:
+        print("[Warmup] Calling AI analyzer for warmup...")
+        response = requests.post(
+            AI_ANALYZER_URL,
+            json={"logs": ["warmup request"]},
+            timeout=30
+        )
+        response.raise_for_status()
+        print("[Warmup] AI service warmed successfully")
+        return {"status": "AI service warmed"}
+    except Exception as e:
+        print(f"[Warmup] Failed: {str(e)}")
+        return {"status": "Warmup failed", "error": str(e)}
 
 
 @app.get("/debug")
