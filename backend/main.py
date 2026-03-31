@@ -329,11 +329,11 @@ async def warmup():
         print("[Warmup] Calling AI analyzer for warmup...")
         response = requests.post(
             AI_ANALYZER_URL,
-            json={"logs": ["warmup request"]},
+            json={"logs": ["warmup ping"]},
             timeout=30
         )
         response.raise_for_status()
-        print("[Warmup] AI service warmed successfully")
+        print("[Warmup] Success")
         return {"status": "AI service warmed"}
     except Exception as e:
         print(f"[Warmup] Failed: {str(e)}")
