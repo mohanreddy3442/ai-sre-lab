@@ -7,7 +7,7 @@ Includes JWT authentication and SQLite database for history storage.
 from fastapi import FastAPI, HTTPException, Request, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from starlette.responses import Response, JSONResponse
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -15,7 +15,7 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 import os
 import time
 import requests
@@ -204,8 +204,7 @@ class HistoryResponse(BaseModel):
     recommendation: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ================================================
@@ -383,7 +382,7 @@ async def analyze(request: AnalyzeRequest, db = Depends(get_db)):
 
 
 @app.get("/history", response_model=List[HistoryResponse])
-async def get_history(db = Depends(get_db)):
+async def get_history(db: Session = Depends(get_db)):
     """Get all analysis history (no auth required)"""
     analyses = db.query(Analysis).order_by(Analysis.created_at.desc()).all()
     return analyses
