@@ -203,6 +203,7 @@ async def wakeup_ai_analyzer():
     Background task to keep AI analyzer awake.
     Runs every 5 minutes and sends a lightweight request.
     """
+    print("[DEBUG] Using AI_ANALYZER_URL:", AI_ANALYZER_URL)
     while True:
         try:
             print("[Background] Sending warmup request to AI analyzer...")
@@ -325,6 +326,7 @@ async def warmup():
     Warmup endpoint - calls AI analyzer once to wake it up.
     Returns status of warmup operation.
     """
+    print("[DEBUG] Using AI_ANALYZER_URL:", AI_ANALYZER_URL)
     try:
         print("[Warmup] Calling AI analyzer for warmup...")
         response = requests.post(
