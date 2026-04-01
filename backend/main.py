@@ -198,28 +198,108 @@ service_errors_total = Counter(
 # BACKGROUND AUTO-WAKE SYSTEM
 # ================================================
 
+# Global variable for cooldown tracking
+last_warmup_time = 0
+
+
+def attempt_warmup():
+    """
+    Attempt to warm up the AI analyzer service.
+    - Only retries ONCE if it fails
+    - 5-second delay before retry
+    - Ignores 429 errors (rate limited)
+    - Updates last_warmup_time on success
+    """
+    global last_warmup_time
+    
+    print("[Background] Sending warmup request to AI analyzer...")
+    
+    # First attempt
+    try:
+        response = requests.post(
+            AI_ANALYZER_URL,
+            json={"logs": ["health check log"]},
+            timeout=10
+        )
+        
+        # Check for rate limit (429)
+        if response.status_code == 429:
+            print("[Background] Rate limited, skipping warmup")
+            return
+        
+        response.raise_for_status()
+        print("[Background] AI analyzer warmed up successfully")
+        last_warmup_time = time.time()
+        return
+        
+    except requests.exceptions.HTTPError as e:
+        error_msg = str(e)
+        # Check for 429 in error message
+        if "429" in error_msg:
+            print("[Background] Rate limited, skipping warmup")
+            return
+        print(f"[Background] Warmup attempt failed: {error_msg}")
+    except Exception as e:
+        print(f"[Background] Warmup attempt failed: {str(e)}")
+    
+    # Retry once after 5-second delay (only if not rate limited)
+    print("[Background] Retrying warmup after 5 seconds...")
+    time.sleep(5)
+    
+    try:
+        response = requests.post(
+            AI_ANALYZER_URL,
+            json={"logs": ["health check log"]},
+            timeout=10
+        )
+        
+        # Check for rate limit (429)
+        if response.status_code == 429:
+            print("[Background] Rate limited, skipping warmup")
+            return
+        
+        response.raise_for_status()
+        print("[Background] AI analyzer warmed up successfully (retry)")
+        last_warmup_time = time.time()
+        return
+        
+    except requests.exceptions.HTTPError as e:
+        error_msg = str(e)
+        # Check for 429 in error message
+        if "429" in error_msg:
+            print("[Background] Rate limited, skipping warmup")
+            return
+        print(f"[Background] Warmup retry failed: {error_msg}")
+    except Exception as e:
+        print(f"[Background] Warmup retry failed: {str(e)}")
+    
+    print("[Background] Warmup failed after retry")
+
+
 async def wakeup_ai_analyzer():
     """
     Background task to keep AI analyzer awake.
     Runs every 5 minutes and sends a lightweight request.
+    Includes cooldown logic to prevent rate limiting.
     """
+    global last_warmup_time
+    
     print("[DEBUG] Using AI_ANALYZER_URL:", AI_ANALYZER_URL)
+    
+    # Initial warmup on startup
+    attempt_warmup()
+    
     while True:
-        try:
-            print("[Background] Sending warmup request to AI analyzer...")
-            response = requests.post(
-                AI_ANALYZER_URL,
-                json={"logs": ["health check log"]},
-                timeout=10
-            )
-            response.raise_for_status()
-            print("[Background] AI analyzer warmed up successfully")
-        except Exception as e:
-            # Silent failure - ignore errors, don't crash
-            print(f"[Background] Warmup attempt failed (ignored): {str(e)}")
-        
-        # Wait 5 minutes before next wakeup
+        # Wait 5 minutes before next wakeup attempt
         await asyncio.sleep(300)
+        
+        # Check cooldown before sending request
+        current_time = time.time()
+        if current_time - last_warmup_time < 300:
+            print("[Background] Warmup skipped (cooldown active)")
+            continue
+        
+        attempt_warmup()
 
 
 @app.on_event("startup")
